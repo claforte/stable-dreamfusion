@@ -39,6 +39,12 @@ cd stable-dreamfusion
 
 ### Install with pip
 ```bash
+
+sudo apt install python3-dev python3-wheel # Python development libraries and wheel
+
+python -m venv venv # create virtual environment
+source venv/bin/activate # activate virtual env
+
 pip install -r requirements.txt
 
 # (optional) install nvdiffrast for exporting textured mesh (if use --save_mesh)
@@ -62,6 +68,7 @@ pip install ./raymarching # install to python path (you still need the raymarchi
 
 ### Tested environments
 * Ubuntu 22 with torch 1.12 & CUDA 11.6 on a V100.
+* Ubuntu 22 with torch 1.13 & CUDA 11.7 on a RTX-3090. (in progress)
 
 
 # Usage
