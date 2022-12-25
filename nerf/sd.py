@@ -4,9 +4,11 @@ from diffusers import AutoencoderKL, UNet2DConditionModel, PNDMScheduler, DDIMSc
 # suppress partial model loading warning
 logging.set_verbosity_error()
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.utils import save_image
 
 import time
 
@@ -71,8 +73,7 @@ class StableDiffusion(nn.Module):
         return text_embeddings
 
 
-    def train_step(self, text_embeddings, pred_rgb, guidance_scale=100):
-        
+    def train_step(self, text_embeddings, pred_rgb, guidance_scale=100, save_viz_guidance_filename=None, global_step=None):
         # interp to 512x512 to be fed into vae.
 
         # _t = time.time()
@@ -80,7 +81,9 @@ class StableDiffusion(nn.Module):
         # torch.cuda.synchronize(); print(f'[TIME] guiding: interp {time.time() - _t:.4f}s')
 
         # timestep ~ U(0.02, 0.98) to avoid very high/low noise level
-        t = torch.randint(self.min_step, self.max_step + 1, [1], dtype=torch.long, device=self.device)
+        # claforte: HACK: reduce the noise considerably
+        #t = torch.randint(self.min_step, self.max_step + 1, [1], dtype=torch.long, device=self.device)
+        t = torch.randint(self.min_step*4, 800, [1], dtype=torch.long, device=self.device)
 
         # encode image into latents with vae, requires grad!
         # _t = time.time()
@@ -92,10 +95,13 @@ class StableDiffusion(nn.Module):
         with torch.no_grad():
             # add noise
             noise = torch.randn_like(latents)
-            latents_noisy = self.scheduler.add_noise(latents, noise, t)
+            latents_noisy = self.scheduler.add_noise(latents, noise, t)     
+            # visualize noisier image
+            result_noisier_image = self.decode_latents(latents_noisy)    
             # pred noise
             latent_model_input = torch.cat([latents_noisy] * 2)
             noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=text_embeddings).sample
+
         # torch.cuda.synchronize(); print(f'[TIME] guiding: unet {time.time() - _t:.4f}s')
 
         # perform guidance (high scale from paper!)
@@ -110,6 +116,17 @@ class StableDiffusion(nn.Module):
         # clip grad for stable training?
         # grad = grad.clamp(-10, 10)
         grad = torch.nan_to_num(grad)
+
+        # claforte: attempt to visualize the image SD tried to converge toward:
+        with torch.no_grad():
+            if save_viz_guidance_filename:
+                # visualize predicted denoised image
+                result_hopefully_less_noisy_image = self.decode_latents(latents + w*(noise_pred - noise))
+                # all 3 input images are [1, 3, H, W], e.g. [1, 3, 512, 512]
+                viz_images = torch.cat([pred_rgb_512, result_noisier_image, result_hopefully_less_noisy_image],dim=-1)
+                
+                #cv2.imwrite(os.path.join(save_path, f'{name}_{i:04d}_rgb.png'), cv2.cvtColor(viz_images.squeeze().cpu().numpy(), cv2.COLOR_RGB2BGR))
+                save_image(viz_images, save_viz_guidance_filename)
 
         # manually backward, since we omitted an item in grad and cannot simply autodiff.
         # _t = time.time()

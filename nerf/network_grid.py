@@ -46,7 +46,7 @@ class NeRFNetwork(NeRFRenderer):
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
 
-        self.encoder, self.in_dim = get_encoder('tiledgrid', input_dim=3, log2_hashmap_size=16, desired_resolution=2048 * self.bound)
+        self.encoder, self.in_dim = get_encoder('tiledgrid', num_levels=8, input_dim=3, log2_hashmap_size=9, desired_resolution=512 * self.bound)
 
         self.sigma_net = MLP(self.in_dim, 4, hidden_dim, num_layers, bias=True)
 

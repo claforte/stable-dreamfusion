@@ -334,8 +334,8 @@ class Trainer(object):
 
     ### ------------------------------	
 
-    def train_step(self, data):
-
+    def train_step(self, data, save_viz_guidance_filename=None):
+        # save_viz_guidance: if not None, this is used as a filename, to save the prediction, noise, and denoised images for this step.
         rays_o = data['rays_o'] # [B, N, 3]
         rays_d = data['rays_d'] # [B, N, 3]
 
@@ -351,12 +351,13 @@ class Trainer(object):
             if rand > 0.8: 
                 shading = 'albedo'
                 ambient_ratio = 1.0
-            elif rand > 0.4: 
-                shading = 'textureless'
-                ambient_ratio = 0.1
+            # claforte: HACK: disable textureless
+            #elif rand > 0.4: 
+            #    shading = 'textureless'
+            #    ambient_ratio = 0.1
             else: 
                 shading = 'lambertian'
-                ambient_ratio = 0.1
+                ambient_ratio = 0.2
 
         # _t = time.time()
         bg_color = torch.rand((B * N, 3), device=rays_o.device) # pixel-wise random
@@ -376,7 +377,7 @@ class Trainer(object):
         
         # encode pred_rgb to latents
         # _t = time.time()
-        loss = self.guidance.train_step(text_z, pred_rgb)
+        loss = self.guidance.train_step(text_z, pred_rgb, save_viz_guidance_filename=save_viz_guidance_filename, global_step=self.global_step)
         # torch.cuda.synchronize(); print(f'[TIME] total guiding {time.time() - _t:.4f}s')
 
         # occupancy loss
@@ -703,7 +704,8 @@ class Trainer(object):
             self.optimizer.zero_grad()
 
             with torch.cuda.amp.autocast(enabled=self.fp16):
-                pred_rgbs, pred_ws, loss = self.train_step(data)
+                save_viz_guidance_filename = os.path.join(self.workspace, f'viz_guidance_{self.global_step:07d}_rgb.png')
+                pred_rgbs, pred_ws, loss = self.train_step(data, save_viz_guidance_filename=save_viz_guidance_filename)
          
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
