@@ -142,7 +142,6 @@ def rand_poses(size, device, radius_range=[1, 1.5], theta_range=[0, 120], phi_ra
 
 
 def circle_poses(device, radius=1.25, theta=60, phi=0, return_dirs=False, angle_overhead=30, angle_front=60):
-
     theta = np.deg2rad(theta)
     phi = np.deg2rad(phi)
     angle_overhead = np.deg2rad(angle_overhead)
@@ -174,6 +173,8 @@ def circle_poses(device, radius=1.25, theta=60, phi=0, return_dirs=False, angle_
     
     return poses, dirs    
     
+# claforte: Yeah, this is a mess, but I'm in vacations.
+specified_view_data = None
 
 class NeRFDataset:
     def __init__(self, opt, device, type='train', H=256, W=256, size=100):
@@ -198,9 +199,29 @@ class NeRFDataset:
         # poses, dirs = rand_poses(100, self.device, radius_range=self.radius_range, return_dirs=self.opt.dir_text, angle_overhead=self.opt.angle_overhead, angle_front=self.opt.angle_front, jitter=self.opt.jitter_pose, uniform_sphere_rate=1)
         # visualize_poses(poses.detach().cpu().numpy(), dirs.detach().cpu().numpy())
 
+    def specified_view(self):
+        """Prepare a fixed camera pose corresponding roughly to a specified image's."""
+        phi = 45 # number of degrees along the Y axis
+        poses, dirs = circle_poses(self.device, radius=self.radius_range[1] * 1.2, theta=60, phi=phi, return_dirs=self.opt.dir_text, angle_overhead=self.opt.angle_overhead, angle_front=self.opt.angle_front)
+
+        # fixed focal
+        fov = (self.fovy_range[1] + self.fovy_range[0]) / 2
+        focal = self.H / (2 * np.tan(np.deg2rad(fov) / 2))
+        intrinsics = np.array([focal, focal, self.cx, self.cy])
+
+        # sample a low-resolution but full image for CLIP
+        rays = get_rays(poses, intrinsics, self.H, self.W, -1)
+
+        data = {
+            'H': self.H,
+            'W': self.W,
+            'rays_o': rays['rays_o'],
+            'rays_d': rays['rays_d'],
+            'dir': dirs,
+        }
+        return data
 
     def collate(self, index):
-
         B = len(index) # always 1
 
         if self.training:

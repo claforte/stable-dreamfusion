@@ -21,6 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--workspace', type=str, default='workspace')
     parser.add_argument('--guidance', type=str, default='stable-diffusion', help='choose from [stable-diffusion, clip]')
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--target_image', type=str, default='none', help='image regularly compared against during training')
 
     ### training options
     parser.add_argument('--iters', type=int, default=10000, help="training iters")
@@ -130,8 +131,9 @@ if __name__ == '__main__':
                 trainer.save_mesh(resolution=256)
     
     else:
-        
-        train_loader = NeRFDataset(opt, device=device, type='train', H=opt.h, W=opt.w, size=100).dataloader()
+        dataset = NeRFDataset(opt, device=device, type='train', H=opt.h, W=opt.w, size=100)
+        train_loader = dataset.dataloader()
+        opt.specified_view_data = dataset.specified_view()
 
         if opt.optim == 'adan':
             from optimizer import Adan

@@ -22,6 +22,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.distributed as dist
 from torch.utils.data import Dataset, DataLoader
+from torchvision.io import read_image
+import torchvision.transforms as transforms
 
 import trimesh
 from rich.console import Console
@@ -207,14 +209,21 @@ class Trainer(object):
 
         # text prompt
         if self.guidance is not None:
-            
             for p in self.guidance.parameters():
                 p.requires_grad = False
 
             self.prepare_text_embeddings()
-        
         else:
             self.text_z = None
+
+        # chosen image
+        self.opt.chosen_image = read_image('/home/claforte/git/stable-dreamfusion/assets/1867051612_photo_of_perfect_fuji_apple__1_0.png')
+        # claforte TODO: check if need to mark this tensor as no_grad (I don't recall how this works)
+        self.opt.resized_chosen_image = transforms.Resize(self.opt.w, antialias=transforms.InterpolationMode.BILINEAR)(self.opt.chosen_image)
+        self.opt.resized_chosen_image = (self.opt.resized_chosen_image.float() / 256.0).to(self.device)
+        self.opt.resized_chosen_image.requires_grad_(False)
+            
+        # resize to torch.Size([1, 3, 128, 128])
     
         if isinstance(criterion, nn.Module):
             criterion.to(self.device)
@@ -334,7 +343,12 @@ class Trainer(object):
 
     ### ------------------------------	
 
-    def train_step(self, data, save_viz_guidance_filename=None):
+    def train_step(self, data, save_viz_guidance_filename=None, is_specified_view=False):
+        """
+            Args:
+                is_specified_view: if True, this is a special view that corresponds to a specified image
+        """
+        
         # save_viz_guidance: if not None, this is used as a filename, to save the prediction, noise, and denoised images for this step.
         rays_o = data['rays_o'] # [B, N, 3]
         rays_d = data['rays_d'] # [B, N, 3]
@@ -343,7 +357,7 @@ class Trainer(object):
         H, W = data['H'], data['W']
 
         # TODO: shading is not working right now...
-        if self.global_step < self.opt.albedo_iters:
+        if self.global_step < self.opt.albedo_iters or is_specified_view: # claforte HACK
             shading = 'albedo'
             ambient_ratio = 1.0
         else: 
@@ -377,7 +391,11 @@ class Trainer(object):
         
         # encode pred_rgb to latents
         # _t = time.time()
-        loss = self.guidance.train_step(text_z, pred_rgb, save_viz_guidance_filename=save_viz_guidance_filename, global_step=self.global_step)
+        if is_specified_view: # claforte HACK
+            loss = self.guidance.train_step(text_z, pred_rgb, save_viz_guidance_filename=save_viz_guidance_filename, global_step=self.global_step) # note: dummy loss always set to 0
+            loss += 10000.0 * F.mse_loss(pred_rgb.squeeze(), self.opt.resized_chosen_image)
+        else:
+            loss = self.guidance.train_step(text_z, pred_rgb, save_viz_guidance_filename=save_viz_guidance_filename, global_step=self.global_step)
         # torch.cuda.synchronize(); print(f'[TIME] total guiding {time.time() - _t:.4f}s')
 
         # occupancy loss
@@ -525,9 +543,7 @@ class Trainer(object):
             all_preds_depth = []
 
         with torch.no_grad():
-
             for i, data in enumerate(loader):
-                
                 with torch.cuda.amp.autocast(enabled=self.fp16):
                     preds, preds_depth = self.test_step(data)
 
@@ -557,7 +573,6 @@ class Trainer(object):
     
     # [GUI] train text step.
     def train_gui(self, train_loader, step=16):
-
         self.model.train()
 
         total_loss = torch.tensor([0], dtype=torch.float32, device=self.device)
@@ -692,7 +707,12 @@ class Trainer(object):
         self.local_step = 0
 
         for data in loader:
-            
+            # claforte HACK!
+            # every (by default, 16/2) steps, use the specified image and a fixed pose
+            is_specified_view = (self.global_step % (self.opt.update_extra_interval/2) == 0)
+            if is_specified_view:
+                data = self.opt.specified_view_data
+
             # update grid every 16 steps
             if self.model.cuda_ray and self.global_step % self.opt.update_extra_interval == 0:
                 with torch.cuda.amp.autocast(enabled=self.fp16):
@@ -705,7 +725,7 @@ class Trainer(object):
 
             with torch.cuda.amp.autocast(enabled=self.fp16):
                 save_viz_guidance_filename = os.path.join(self.workspace, f'viz_guidance_{self.global_step:07d}_rgb.png')
-                pred_rgbs, pred_ws, loss = self.train_step(data, save_viz_guidance_filename=save_viz_guidance_filename)
+                pred_rgbs, pred_ws, loss = self.train_step(data, save_viz_guidance_filename=save_viz_guidance_filename, is_specified_view=is_specified_view)
          
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)

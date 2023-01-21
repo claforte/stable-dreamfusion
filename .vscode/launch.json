@@ -12,6 +12,33 @@
             "args": ["--text", "\"a photo of a perfect beautiful BLT cheeseburger\"", "--workspace", "trial", "-O", "--ckpt", "scratch", "--w", "128", "--h", "128"]
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "main.py hotdog",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": ["--text", "\"a photo of a perfect beautiful hotdog. HQ. 4K.\"", "--workspace", "trial", "-O", "--ckpt", "scratch", "--w", "128", "--h", "128"]
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "main.py corolla",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": ["--text", "\"photo of a 2018 gray toyota corolla for sale, centered composition, blue sky\"", "--workspace", "trial", "-O", "--ckpt", "scratch", "--w", "128", "--h", "128", "--negative", "tinted windows, trees, sun glare"]
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "main.py apple",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": ["--text", "\"studio photo of a Fuji apple\"", "--workspace", "trial", "-O", "--ckpt", "scratch", "--w", "128", "--h", "128", "--negative", "malformed"]
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }

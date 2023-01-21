@@ -57,10 +57,10 @@ class NeRFNetwork(NeRFRenderer):
             
             # use a very simple network to avoid it learning the prompt...
             # self.encoder_bg, self.in_dim_bg = get_encoder('tiledgrid', input_dim=2, num_levels=4, desired_resolution=2048)
-            self.encoder_bg, self.in_dim_bg = get_encoder('frequency', input_dim=3, multires=4)
-
-            self.bg_net = MLP(self.in_dim_bg, 3, hidden_dim_bg, num_layers_bg, bias=True)
-            
+            #self.encoder_bg, self.in_dim_bg = get_encoder('frequency', input_dim=3, multires=4)
+            # claforte HACK: even simpler background network:
+            self.encoder_bg, self.in_dim_bg = get_encoder('frequency', input_dim=3, multires=2)
+            self.bg_net = MLP(self.in_dim_bg, 1, hidden_dim_bg, num_layers_bg, bias=True)
         else:
             self.bg_net = None
 
